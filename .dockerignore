@@ -1,0 +1,7 @@
+.git
+.venv
+**/__pycache__
+ml/data
+ml/artifacts
+native/build
+bench

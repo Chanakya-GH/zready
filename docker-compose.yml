@@ -19,3 +19,28 @@ services:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       retries: 10
+  inference:
+    build:
+      context: .
+      dockerfile: deploy/inference.Dockerfile
+    environment:
+      MODEL_NAME: xgb
+    ports: ["127.0.0.1:8000:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 5s
+      retries: 10
+  gateway:
+    build:
+      context: .
+      dockerfile: deploy/gateway.Dockerfile
+    environment:
+      MODEL_NAME: xgb
+      INFERENCE_URL: http://inference:8000
+      REDIS_ADDR: redis:6379
+      DATABASE_URL: postgres://zready:zready@postgres:5432/zready
+    ports: ["127.0.0.1:8080:8080"]
+    depends_on:
+      inference: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      postgres: {condition: service_healthy}

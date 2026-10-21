@@ -1,0 +1,1 @@
+Scoring should still return 200 with X-Cache: MISS, and /readyz should show "redis":"down" but still return 200. That behavior is a strong interview point. Be ready to explain why Redis and Postgres don’t affect readiness: failing readiness would make Kubernetes pull a healthy gateway out of service over a cache outage.

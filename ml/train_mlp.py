@@ -17,18 +17,7 @@ Xfit, Xval, yfit, yval = train_test_split(
 mean = Xfit.mean(0).astype(np.float32)
 std = (Xfit.std(0) + 1e-6).astype(np.float32)
 
-class MLP(nn.Module):
-    def __init__(self, mean, std):
-        super().__init__()
-        self.register_buffer("mean", torch.from_numpy(mean))
-        self.register_buffer("std", torch.from_numpy(std))
-        self.net = nn.Sequential(
-            nn.Linear(29, 64), nn.ReLU(), nn.Dropout(0.1),
-            nn.Linear(64, 32), nn.ReLU(),
-            nn.Linear(32, 1),
-        )
-    def forward(self, x):                      # returns logits
-        return self.net((x - self.mean) / self.std).squeeze(-1)
+from mlp_model import MLP
 
 def scores(model, X):
     model.eval()

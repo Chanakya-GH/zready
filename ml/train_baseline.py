@@ -11,3 +11,15 @@ clf = make_pipeline(StandardScaler(),
                     LogisticRegression(max_iter=1000, class_weight="balanced"))
 clf.fit(Xtr, ytr)
 report("logreg", yte, clf.predict_proba(Xte)[:, 1])
+
+from pathlib import Path
+import joblib
+out = Path(__file__).parent / "artifacts"
+out.mkdir(exist_ok=True)
+joblib.dump(clf, out / "logreg.joblib")
+
+from pathlib import Path
+import joblib
+out = Path(__file__).parent / "artifacts"
+out.mkdir(exist_ok=True)
+joblib.dump(clf, out / "logreg.joblib")

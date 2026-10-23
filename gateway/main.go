@@ -193,6 +193,7 @@ func (s *server) handleScore(w http.ResponseWriter, r *http.Request) {
 	ireq.Header.Set("Content-Type", "application/json")
 	resp, err := s.hc.Do(ireq)
 	if err != nil {
+		slog.Warn("inference call failed", "err", err)
 		if errors.Is(ictx.Err(), context.DeadlineExceeded) {
 			status = http.StatusGatewayTimeout
 			writeErr(w, status, "inference timed out")
@@ -206,6 +207,7 @@ func (s *server) handleScore(w http.ResponseWriter, r *http.Request) {
 	out, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	sc, ok := parseScores(out, n)
 	if err != nil || resp.StatusCode != http.StatusOK || !ok {
+		slog.Warn("bad inference response", "read_err", err, "upstream_status", resp.StatusCode, "scores_ok", ok, "body", string(out[:min(len(out), 200)]))
 		status = http.StatusBadGateway
 		writeErr(w, status, "bad response from inference")
 		return
@@ -293,7 +295,7 @@ func main() {
 
 	s := &server{
 		rdb: redis.NewClient(&redis.Options{
-			Addr: env("REDIS_ADDR", "localhost:6379"),
+			Addr:        env("REDIS_ADDR", "localhost:6379"),
 			DialTimeout: 500 * time.Millisecond, ReadTimeout: 200 * time.Millisecond,
 			WriteTimeout: 200 * time.Millisecond,
 		}),

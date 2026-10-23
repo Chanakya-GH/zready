@@ -26,3 +26,12 @@ Cache MISS 22.68 ms vs HIT 0.69 ms (includes cold-start effects). Proper latency
 
 ## Latency / throughput
 TODO (Phase 7): sklearn / XGBoost native vs ONNX Runtime vs Snap ML, amd64 only.
+
+## Bootstrap time (Ansible: kind cluster + build + load + deploy, warm Docker cache)
+| Run | Wall-clock |
+|---|---|
+| 1 | 1m21s |
+| 2 | 1m46.7s |
+| 3 | 1m46.2s |
+
+ThinkBook i5-1335U, 16GB. A cold Docker cache (no cached images) was not measured and will be slower.

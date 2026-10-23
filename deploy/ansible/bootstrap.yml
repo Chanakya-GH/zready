@@ -1,0 +1,62 @@
+- name: Bootstrap zready on a local kind cluster
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    cluster: zready
+    root: "{{ playbook_dir | dirname | dirname }}"
+    ctx: "kind-{{ cluster }}"
+    restart: false
+  tasks:
+    - name: Check required tools
+      ansible.builtin.shell: "command -v {{ item }}"
+      args:
+        executable: /bin/bash
+      loop: [docker, kind, kubectl]
+      changed_when: false
+
+    - name: List existing kind clusters
+      ansible.builtin.command: kind get clusters
+      register: clusters
+      changed_when: false
+      failed_when: false
+
+    - name: Create the kind cluster if missing
+      ansible.builtin.command: "kind create cluster --name {{ cluster }}"
+      when: cluster not in clusters.stdout_lines
+
+    - name: Build images
+      ansible.builtin.command: "docker build -f deploy/{{ item }}.Dockerfile -t zready-{{ item }}:latest ."
+      args:
+        chdir: "{{ root }}"
+      loop: [inference, gateway]
+      changed_when: false
+
+    - name: Load images into the cluster
+      ansible.builtin.command: "kind load docker-image zready-gateway:latest zready-inference:latest --name {{ cluster }}"
+      changed_when: false
+
+    - name: Apply manifests
+      ansible.builtin.command: "kubectl --context {{ ctx }} apply -k deploy"
+      args:
+        chdir: "{{ root }}"
+      register: applied
+      changed_when: "'configured' in applied.stdout or 'created' in applied.stdout"
+
+    - name: Restart app deployments to pick up rebuilt images
+      ansible.builtin.command: "kubectl --context {{ ctx }} -n zready rollout restart deploy/gateway deploy/inference"
+      when: restart | bool
+
+    - name: Wait for rollouts
+      ansible.builtin.command: "kubectl --context {{ ctx }} -n zready rollout status deploy/{{ item }} --timeout=180s"
+      loop: [postgres, redis, inference, gateway]
+      changed_when: false
+
+    - name: Show pods
+      ansible.builtin.command: "kubectl --context {{ ctx }} -n zready get pods"
+      register: pods
+      changed_when: false
+
+    - name: Result
+      ansible.builtin.debug:
+        var: pods.stdout_lines

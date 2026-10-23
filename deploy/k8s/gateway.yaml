@@ -25,6 +25,7 @@ spec:
           readinessProbe:
             httpGet: {path: /readyz, port: 8080}
             periodSeconds: 5
+            timeoutSeconds: 2
           livenessProbe:
             httpGet: {path: /healthz, port: 8080}
             initialDelaySeconds: 5

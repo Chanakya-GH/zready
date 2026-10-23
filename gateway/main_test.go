@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -90,5 +92,34 @@ func TestInferenceErrorIs502(t *testing.T) {
 	}, time.Second)
 	if rec := post(s, body(1, nFeatures)); rec.Code != 502 {
 		t.Fatalf("want 502, got %d", rec.Code)
+	}
+}
+
+func TestReadyzOnlyDependsOnInference(t *testing.T) {
+	s := testServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(200)
+	}, time.Second)
+	pool, err := pgxpool.New(context.Background(), "postgres://u:p@127.0.0.1:1/db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	s.pool = pool
+
+	rec := httptest.NewRecorder()
+	start := time.Now()
+	s.handleReady(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+	if rec.Code != 200 {
+		t.Fatalf("want 200 with redis and postgres down, got %d", rec.Code)
+	}
+	if d := time.Since(start); d > 700*time.Millisecond {
+		t.Fatalf("readyz took %v", d)
+	}
+	var body map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["inference"] != "up" || body["redis"] != "down" || body["postgres"] != "down" {
+		t.Fatalf("unexpected body: %v", body)
 	}
 }

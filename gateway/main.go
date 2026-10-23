@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -241,28 +242,35 @@ func (s *server) pingInference(ctx context.Context) error {
 }
 
 // Ready depends only on inference: cache and logging are best-effort.
+// Each check has its own timeout and they run in parallel, so a slow
+// dependency cannot starve the others or push the probe past its timeout.
 func (s *server) handleReady(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), time.Second)
-	defer cancel()
-	state := func(err error) string {
-		if err != nil {
+	check := func(f func(context.Context) error) string {
+		ctx, cancel := context.WithTimeout(r.Context(), 500*time.Millisecond)
+		defer cancel()
+		if f(ctx) != nil {
 			return "down"
 		}
 		return "up"
 	}
-	infErr := s.pingInference(ctx)
-	body := map[string]string{
-		"inference": state(infErr),
-		"redis":     state(s.rdb.Ping(ctx).Err()),
-		"postgres":  state(s.pool.Ping(ctx)),
-	}
+	var inf, rds, pg string
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() { defer wg.Done(); inf = check(s.pingInference) }()
+	go func() {
+		defer wg.Done()
+		rds = check(func(c context.Context) error { return s.rdb.Ping(c).Err() })
+	}()
+	go func() { defer wg.Done(); pg = check(s.pool.Ping) }()
+	wg.Wait()
+
 	code := http.StatusOK
-	if infErr != nil {
+	if inf != "up" {
 		code = http.StatusServiceUnavailable
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(body)
+	_ = json.NewEncoder(w).Encode(map[string]string{"inference": inf, "redis": rds, "postgres": pg})
 }
 
 func env(k, d string) string {
